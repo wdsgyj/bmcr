@@ -45,7 +45,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	for _, c := range crashs {
-		log.Println(c)
-	}
+	//	for _, c := range crashs {
+	//		log.Println(c.Feature)
+	//	}
 }

@@ -2,7 +2,9 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"log"
 	"regexp"
 	"strconv"
@@ -33,6 +35,7 @@ type Crash struct {
 	locy         int
 	CpuAbi       string
 	CpuAbi2      string
+	Feature      string
 	ComsInfo     []string
 	Pages        []string
 }
@@ -184,6 +187,7 @@ func parseActParam(crash *Crash, txt string) error {
 		switch key {
 		case "detail":
 			crash.Detail = value
+			parseFeature(crash, value)
 		case "mem_info":
 			crash.Meminfo = value
 		case "active_thread":
@@ -199,4 +203,45 @@ func parseActParam(crash *Crash, txt string) error {
 		}
 	}
 	return nil
+}
+
+const (
+	_BAIDU_PREFIX_1 = "at com.baidu."
+	_BAIDU_PREFIX_2 = "at map."
+)
+
+func parseFeature(crash *Crash, txt string) {
+	txt = strings.TrimSpace(txt)
+	if len(txt) == 0 {
+		return
+	}
+	lines := strings.Split(txt, "<br>")
+	buf := new(bytes.Buffer)
+	fill := false
+	for _, line := range lines {
+		if strings.HasPrefix(line, _BAIDU_PREFIX_1) ||
+			strings.HasPrefix(line, _BAIDU_PREFIX_2) {
+			fill = true
+			fmt.Fprintln(buf, line)
+		}
+	}
+
+	if !fill {
+		for _, line := range lines {
+			if strings.HasPrefix(line, "at ") {
+				index := strings.IndexByte(line, '(') // 去除文件名 + 行号
+				if index == -1 {
+					fmt.Fprintln(buf, line)
+				} else {
+					fmt.Fprintln(buf, line[:index])
+				}
+			}
+		}
+	}
+
+	crash.Feature = buf.String()
+
+	if !fill {
+		log.Printf("\n%s\n", crash.Feature)
+	}
 }
