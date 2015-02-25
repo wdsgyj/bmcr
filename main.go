@@ -14,7 +14,7 @@ var fileFlag = flag.String("crash", "", "Crash File")
 func init() {
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 	var err error
-	regx, err = regexp.Compile(`\{([^\s\{\}\d=]{3,}?)=`)
+	regx, err = regexp.Compile(`\{([^\s\{\}=/w]{3,}?)=`)
 	if err != nil {
 		log.Fatalln(err)
 	}

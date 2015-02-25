@@ -194,10 +194,10 @@ func parseDetail(crash *Crash, txt string) error {
 
 		index := strings.LastIndex(v, "}")
 		if i != -1 {
-			log.Println(k, v)
-			log.Println(txt)
 			v = v[:index] // 去除 } 字符
 		}
+
+		//		log.Println(k, v)
 
 		return k, v
 	}
