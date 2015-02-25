@@ -111,19 +111,9 @@ func parseMainItem(crash *Crash, item string) error {
 	case "sv":
 		crash.Sv = value
 	case "sw":
-		num, err := strconv.ParseInt(value, 10, 32)
-		if err != nil {
-			log.Println("Error sw:", err, value)
-		} else {
-			crash.Sw = int(num)
-		}
+		crash.Sw, _ = strconv.Atoi(value)
 	case "sh":
-		num, err := strconv.ParseInt(value, 10, 32)
-		if err != nil {
-			log.Println("Error sh:", err, value)
-		} else {
-			crash.Sh = int(num)
-		}
+		crash.Sh, _ = strconv.Atoi(value)
 	case "ov":
 		crash.Ov = value
 	case "ch":
@@ -131,20 +121,9 @@ func parseMainItem(crash *Crash, item string) error {
 	case "mb":
 		crash.Mb = value
 	case "cuid":
-		v := strings.TrimSpace(value)
-		if len(v) == 0 {
-			log.Println("cuid is empty!")
-		} else {
-			crash.Cuid = v
-		}
+		crash.Cuid = strings.TrimSpace(value)
 	case "net":
-		num, err := strconv.ParseInt(value, 10, 32)
-		if err != nil {
-			log.Println("Error net:", err, value)
-			crash.Net = -1
-		} else {
-			crash.Net = int(num)
-		}
+		crash.Net, _ = strconv.Atoi(value)
 	case "ActParam":
 		used := strings.TrimSpace(value)
 		parseActParam(crash, used)
@@ -208,20 +187,11 @@ func parseActParam(crash *Crash, txt string) error {
 		case "mem_info":
 			crash.Meminfo = value
 		case "active_thread":
-			num, err := strconv.ParseInt(value, 10, 64)
-			if err == nil {
-				crash.ActiveThread = int(num)
-			}
+			crash.ActiveThread, _ = strconv.Atoi(value)
 		case "locx":
-			num, err := strconv.ParseInt(value, 10, 64)
-			if err == nil {
-				crash.locx = int(num)
-			}
+			crash.locx, _ = strconv.Atoi(value)
 		case "locy":
-			num, err := strconv.ParseInt(value, 10, 64)
-			if err == nil {
-				crash.locy = int(num)
-			}
+			crash.locy, _ = strconv.Atoi(value)
 		case "cpu_abi":
 			crash.CpuAbi = value
 		case "cpu_abi2":
