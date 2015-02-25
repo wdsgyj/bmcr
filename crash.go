@@ -147,7 +147,7 @@ func parseMainItem(crash *Crash, item string) error {
 		}
 	case "ActParam":
 		used := strings.TrimSpace(value)
-		parseDetail(crash, used)
+		parseActParam(crash, used)
 	}
 
 	return nil
@@ -177,7 +177,7 @@ var regx *regexp.Regexp
 {cpu_abi=armeabi-v7a}
 {fgw=5}
 */
-func parseDetail(crash *Crash, txt string) error {
+func parseActParam(crash *Crash, txt string) error {
 	indexSlice := regx.FindAllStringSubmatchIndex(txt, -1)
 	size := len(indexSlice)
 	var key, value string
@@ -197,14 +197,36 @@ func parseDetail(crash *Crash, txt string) error {
 			v = v[:index] // 去除 } 字符
 		}
 
-		//		log.Println(k, v)
-
 		return k, v
 	}
 
 	for i := range indexSlice {
 		key, value = getValue(i, size, indexSlice, txt)
-		log.Println(key, value)
+		switch key {
+		case "detail":
+			crash.Detail = value
+		case "mem_info":
+			crash.Meminfo = value
+		case "active_thread":
+			num, err := strconv.ParseInt(value, 10, 64)
+			if err == nil {
+				crash.ActiveThread = int(num)
+			}
+		case "locx":
+			num, err := strconv.ParseInt(value, 10, 64)
+			if err == nil {
+				crash.locx = int(num)
+			}
+		case "locy":
+			num, err := strconv.ParseInt(value, 10, 64)
+			if err == nil {
+				crash.locy = int(num)
+			}
+		case "cpu_abi":
+			crash.CpuAbi = value
+		case "cpu_abi2":
+			crash.CpuAbi2 = value
+		}
 	}
 	return nil
 }
