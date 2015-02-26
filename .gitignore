@@ -2,6 +2,8 @@
 *.o
 *.a
 *.so
+*.db
+bmcr
 
 # Folders
 _obj

@@ -28,7 +28,8 @@ func MainDownload(args []string) {
 	hasError := false
 
 	if len(*flagDate) == 0 {
-		log.Println("no date found!")
+		fmt.Println("没有找到 -date 选项")
+		fmt.Println("使用说明：")
 		cmd.PrintDefaults()
 		os.Exit(1)
 	}
