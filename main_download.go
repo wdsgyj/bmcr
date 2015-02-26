@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
@@ -21,14 +22,16 @@ const (
 
 func MainDownload(args []string) {
 	cmd := flag.NewFlagSet("download", flag.ExitOnError)
-	flagDate := cmd.String("date", "", "日期，例如 2015-02-23")
-	flagDb := cmd.String("db", "data.db", "数据库")
+	flagDate := cmd.String("date", "", "必须，日期，例如 2015-02-23")
+	flagDb := cmd.String("db", "data.db", "可选，数据库文件位置")
 	cmd.Parse(args)
 
 	hasError := false
 
 	if len(*flagDate) == 0 {
-		log.Fatalln("no date found!")
+		log.Println("no date found!")
+		cmd.PrintDefaults()
+		os.Exit(1)
 	}
 
 	db, err := sql.Open("sqlite3", *flagDb)
