@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log"
@@ -13,7 +14,9 @@ import (
 )
 
 const (
-	_TIME_LAYOUT = "20060102150405"
+	_TIME_LAYOUT    = "20060102150405"
+	_BAIDU_PREFIX_1 = "at com.baidu."
+	_BAIDU_PREFIX_2 = "at map."
 )
 
 var (
@@ -21,9 +24,104 @@ var (
 	regxPages  *regexp.Regexp = regexp.MustCompile(`#\d+:([^#]+)`)
 )
 
+type ComsInfo string
+
+func (self ComsInfo) Infos() []string {
+	txt := strings.TrimSpace(string(self))
+	if len(txt) == 0 {
+		return nil
+	}
+
+	infos := strings.Split(txt, "-")
+	rs := make([]string, 0, len(infos))
+	for _, info := range infos {
+		rs = append(rs, info)
+	}
+
+	return rs
+}
+
+type Pages string
+
+func (self Pages) Pages() []string {
+	txt := strings.TrimSpace(string(self))
+	if len(txt) == 0 {
+		return nil
+	}
+
+	couples := regxPages.FindAllStringSubmatchIndex(txt, -1)
+	var index int
+	var page string
+	rs := make([]string, 0, len(couples))
+	for _, couple := range couples {
+		page = txt[couple[2]:couple[3]] // group(1)
+		if index = strings.LastIndex(page, "|"); index != -1 && index != len(page)-1 {
+			page = page[index+1:]
+		}
+		rs = append(rs, page)
+	}
+
+	return rs
+}
+
+type Detail string
+
+func (self Detail) Feature() string {
+	txt := strings.TrimSpace(string(self))
+	if len(txt) == 0 {
+		return ""
+	}
+	lines := strings.Split(txt, "<br>")
+	buf := new(bytes.Buffer)
+	fill := false
+	for _, line := range lines {
+		if strings.HasPrefix(line, _BAIDU_PREFIX_1) ||
+			strings.HasPrefix(line, _BAIDU_PREFIX_2) {
+			fill = true
+			fmt.Fprintln(buf, line)
+		}
+	}
+
+	if !fill {
+		for _, line := range lines {
+			if strings.HasPrefix(line, "at ") {
+				index := strings.IndexByte(line, '(') // 去除文件名 + 行号
+				if index == -1 {
+					fmt.Fprintln(buf, line)
+				} else {
+					fmt.Fprintln(buf, line[:index])
+				}
+			}
+		}
+	}
+
+	return buf.String()
+}
+
+type MemInfo string
+
+// HeapMax:128,DvmTotal:43712,DvmFree:12302,Pss:50401,Private:34224,Shared:11860
+func (self MemInfo) Info() map[string]int {
+	items := strings.Split(string(self), ",")
+	if len(items) != 6 {
+		return nil
+	}
+
+	rs := make(map[string]int)
+	index := -1
+	for _, item := range items {
+		index = strings.Index(item, ":")
+		if index != -1 {
+			rs[item[:index]], _ = strconv.Atoi(item[index+1:])
+		}
+	}
+
+	return rs
+}
+
 type Crash struct {
-	Time time.Time
-	Tm   time.Time
+	Time int64 // 精度为秒
+	Tm   int64 // 精度为秒
 	Sv   string
 	Sw   int
 	Sh   int
@@ -33,16 +131,15 @@ type Crash struct {
 	Cuid string
 	Net  int
 
-	Detail       string
-	Meminfo      string
+	Detail       Detail
+	Meminfo      MemInfo
 	ActiveThread int
-	locx         int
-	locy         int
+	Locx         int
+	Locy         int
 	CpuAbi       string
 	CpuAbi2      string
-	Feature      string
-	ComsInfo     []string
-	Pages        []string
+	ComsInfo     ComsInfo
+	Pages        Pages
 
 	Bgm int
 	Bgt int
@@ -52,18 +149,66 @@ type Crash struct {
 	Fgw int
 }
 
-func New(text string) (rs *Crash, err error) {
+func NewCrash(text string) (rs *Crash, err error) {
 	rs = &Crash{}
 	text = (strings.TrimSpace(text))[1 : len(text)-1] // 去除两边的 [] 字符
-	mainItems := strings.Split(text, "][")
+	logs := strings.Split(text, "][")
 
 	// 处理每一个 mainItem
-	for _, item := range mainItems {
-		if e := parseMainItem(rs, item); e != nil {
+	for _, log := range logs {
+		if e := parseLog(rs, log); e != nil {
 			return nil, e
 		}
 	}
 	return
+}
+
+func NewCrashInsertStmt(db *sql.DB) (*sql.Stmt, error) {
+	return db.Prepare(`INSERT INTO crash (
+			time, tm, sv, sw, sh,
+			ov, ch, mb, cuid, net,
+			detail, mem_info, thread_num, locx, locy,
+			cpu_abi, cpu_abi2, feature, coms_info, pages,
+			bgm, bgt, bgw, fgm, fgt, fgw)
+			VALUES (
+			?, ?, ?, ?, ?,
+			?, ?, ?, ?, ?,
+			?, ?, ?, ?, ?,
+			?, ?, ?, ?, ?,
+			?, ?, ?, ?, ?, ?)`)
+}
+
+func (self *Crash) Insert(stmt *sql.Stmt) error {
+	_, err := stmt.Exec(
+		self.Time,
+		self.Tm,
+		self.Sv,
+		self.Sw,
+		self.Sh,
+		self.Ov,
+		self.Ch,
+		self.Mb,
+		self.Cuid,
+		self.Net,
+
+		self.Detail,
+		self.Meminfo,
+		self.ActiveThread,
+		self.Locx,
+		self.Locy,
+		self.CpuAbi,
+		self.CpuAbi2,
+		self.Detail.Feature(),
+		string(self.ComsInfo),
+		string(self.Pages),
+
+		self.Bgm,
+		self.Bgt,
+		self.Bgw,
+		self.Fgm,
+		self.Fgt,
+		self.Fgw)
+	return err
 }
 
 /*
@@ -84,7 +229,7 @@ func New(text string) (rs *Crash, err error) {
 [act=crashlog]
 [ActParam=……]
 */
-func parseMainItem(crash *Crash, item string) error {
+func parseLog(crash *Crash, item string) error {
 	index := strings.Index(item, "=")
 	if index == -1 {
 		return errors.New("There is no '=' in main item")
@@ -100,11 +245,11 @@ func parseMainItem(crash *Crash, item string) error {
 		if err != nil {
 			log.Println("Error time:", err, value)
 		} else {
-			crash.Time = t
+			crash.Time = t.Unix()
 		}
 	case "tm":
 		inner := strings.Index(value, ".")
-		var second, nsec int64
+		var second int64
 		if inner == -1 {
 			second, err = strconv.ParseInt(value, 10, 64)
 			if err != nil {
@@ -115,13 +260,9 @@ func parseMainItem(crash *Crash, item string) error {
 			if err != nil {
 				log.Println("Error tm:", err, value)
 			}
-			nsec, err = strconv.ParseInt(value[inner+1:]+"000000", 10, 64)
-			if err != nil {
-				log.Println("Error tm:", err, value)
-			}
 		}
 		if err == nil {
-			crash.Tm = time.Unix(second, nsec)
+			crash.Tm = second
 		}
 	case "sv":
 		crash.Sv = value
@@ -196,16 +337,15 @@ func parseActParam(crash *Crash, txt string) error {
 		key, value = getValue(i, size, indexSlice, txt)
 		switch key {
 		case "detail":
-			crash.Detail = value
-			parseFeature(crash, value)
+			crash.Detail = Detail(value)
 		case "mem_info":
-			crash.Meminfo = value
+			crash.Meminfo = MemInfo(value)
 		case "active_thread":
 			crash.ActiveThread, _ = strconv.Atoi(value)
 		case "locx":
-			crash.locx, _ = strconv.Atoi(value)
+			crash.Locx, _ = strconv.Atoi(value)
 		case "locy":
-			crash.locy, _ = strconv.Atoi(value)
+			crash.Locy, _ = strconv.Atoi(value)
 		case "cpu_abi":
 			crash.CpuAbi = value
 		case "cpu_abi2":
@@ -223,77 +363,10 @@ func parseActParam(crash *Crash, txt string) error {
 		case "fgw":
 			crash.Fgw, _ = strconv.Atoi(value)
 		case "coms_info":
-			parseComsInfo(crash, value)
+			crash.ComsInfo = ComsInfo(value)
 		case "pages":
-			parsePages(crash, value)
+			crash.Pages = Pages(value)
 		}
 	}
 	return nil
-}
-
-const (
-	_BAIDU_PREFIX_1 = "at com.baidu."
-	_BAIDU_PREFIX_2 = "at map."
-)
-
-func parseFeature(crash *Crash, txt string) {
-	txt = strings.TrimSpace(txt)
-	if len(txt) == 0 {
-		return
-	}
-	lines := strings.Split(txt, "<br>")
-	buf := new(bytes.Buffer)
-	fill := false
-	for _, line := range lines {
-		if strings.HasPrefix(line, _BAIDU_PREFIX_1) ||
-			strings.HasPrefix(line, _BAIDU_PREFIX_2) {
-			fill = true
-			fmt.Fprintln(buf, line)
-		}
-	}
-
-	if !fill {
-		for _, line := range lines {
-			if strings.HasPrefix(line, "at ") {
-				index := strings.IndexByte(line, '(') // 去除文件名 + 行号
-				if index == -1 {
-					fmt.Fprintln(buf, line)
-				} else {
-					fmt.Fprintln(buf, line[:index])
-				}
-			}
-		}
-	}
-
-	crash.Feature = buf.String()
-}
-
-func parseComsInfo(crash *Crash, txt string) {
-	txt = strings.TrimSpace(txt)
-	if len(txt) == 0 {
-		return
-	}
-
-	infos := strings.Split(txt, "-")
-	for _, info := range infos {
-		crash.ComsInfo = append(crash.ComsInfo, info)
-	}
-}
-
-func parsePages(crash *Crash, txt string) {
-	txt = strings.TrimSpace(txt)
-	if len(txt) == 0 {
-		return
-	}
-
-	couples := regxPages.FindAllStringSubmatchIndex(txt, -1)
-	var index int
-	var page string
-	for _, couple := range couples {
-		page = txt[couple[2]:couple[3]]
-		if index = strings.LastIndex(page, "|"); index != -1 && index != len(page)-1 {
-			page = page[index+1:]
-		}
-		crash.Pages = append(crash.Pages, page)
-	}
 }

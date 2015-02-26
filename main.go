@@ -5,5 +5,5 @@ import (
 )
 
 func main() {
-	MainCrash(os.Args[1:])
+	MainDownload(os.Args[1:])
 }
