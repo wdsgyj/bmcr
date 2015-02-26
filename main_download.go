@@ -51,10 +51,9 @@ func MainDownload(args []string) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
+		fmt.Println("StatusCode:", resp.StatusCode)
 		if content, err := ioutil.ReadAll(resp.Body); err == nil {
 			fmt.Printf("%s\n", content)
-		} else {
-			fmt.Println("StatusCode:", resp.StatusCode)
 		}
 
 		os.Exit(1)
@@ -65,11 +64,11 @@ func MainDownload(args []string) {
 	var textGeted string
 	var chars int
 
-	scanner := bufio.NewScanner(resp.Body)
+	scanner := bufio.NewScanner(resp.Body) // 逐行扫描
 
 	fmt.Println("开始下载并录入数据……")
 
-	tx, err := db.Begin()
+	tx, err := db.Begin() // 开始数据库事务
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -125,6 +124,7 @@ func MainDownload(args []string) {
 		fmt.Println()
 	}
 
+	// 检查，是否扫描过程中发生了错误
 	if err = scanner.Err(); err != nil {
 		log.Println(err)
 		hasError = true
