@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -48,6 +49,16 @@ func MainDownload(args []string) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != 200 {
+		if content, err := ioutil.ReadAll(resp.Body); err == nil {
+			fmt.Printf("%s\n", content)
+		} else {
+			fmt.Println("StatusCode:", resp.StatusCode)
+		}
+
+		os.Exit(1)
+	}
+
 	total, _ := strconv.Atoi(resp.Header.Get("Content-Length"))
 	writed := 0
 	var textGeted string
@@ -55,7 +66,7 @@ func MainDownload(args []string) {
 
 	scanner := bufio.NewScanner(resp.Body)
 
-	fmt.Println("开始下载并梳理数据……")
+	fmt.Println("开始下载并录入数据……")
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -67,15 +78,17 @@ func MainDownload(args []string) {
 		log.Fatalln(err)
 	}
 
-	stmt = tx.Stmt(stmt) // 转换为批处理的 stmt
+	stmt = tx.Stmt(stmt) // 转换为数据库事务的 stmt
 
 	defer func() {
-		if e := recover(); e != nil && tx != nil {
-			fmt.Println("\n出现运行时错误，数据库回滚……")
-			if err = tx.Rollback(); err != nil {
-				fmt.Println("回滚失败！", err)
-			} else {
-				fmt.Println("回滚成功！")
+		if e := recover(); e != nil {
+			if tx != nil {
+				fmt.Println("\n出现运行时错误，数据库回滚……")
+				if err = tx.Rollback(); err != nil {
+					fmt.Println("回滚失败！", err)
+				} else {
+					fmt.Println("回滚成功！")
+				}
 			}
 			fmt.Println(e)
 		}

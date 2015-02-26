@@ -362,7 +362,7 @@ func parseActParam(crash *Crash, txt string) error {
 		}
 
 		index := strings.LastIndex(v, "}")
-		if i != -1 {
+		if index != -1 {
 			v = v[:index] // 去除 } 字符
 		}
 
