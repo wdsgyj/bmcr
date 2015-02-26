@@ -11,8 +11,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-
-	_ "github.com/mattn/go-sqlite3"
 )
 
 const (
@@ -71,6 +69,18 @@ func MainDownload(args []string) {
 
 	stmt = tx.Stmt(stmt) // 转换为批处理的 stmt
 
+	defer func() {
+		if e := recover(); e != nil && tx != nil {
+			fmt.Println("\n出现运行时错误，数据库回滚……")
+			if err = tx.Rollback(); err != nil {
+				fmt.Println("回滚失败！", err)
+			} else {
+				fmt.Println("回滚成功！")
+			}
+			fmt.Println(e)
+		}
+	}()
+
 	for scanner.Scan() {
 		textGeted = scanner.Text()
 		writed += len(textGeted)
@@ -97,6 +107,9 @@ func MainDownload(args []string) {
 			}
 		}
 	}
+	if total != 0 {
+		fmt.Println()
+	}
 
 	if err = scanner.Err(); err != nil {
 		log.Println(err)
@@ -104,17 +117,20 @@ func MainDownload(args []string) {
 	}
 
 	if hasError {
-		err = tx.Rollback()
+		fmt.Println("出现错误，数据库回滚……")
+		if err = tx.Rollback(); err != nil {
+			fmt.Println("回滚失败！", err)
+		} else {
+			fmt.Println("回滚成功！")
+		}
+		os.Exit(1)
 	} else {
-		err = tx.Commit()
+		fmt.Println("提交数据库事务……")
+		if err = tx.Commit(); err != nil {
+			fmt.Println("提交失败！")
+			os.Exit(1)
+		}
 	}
 
-	if err != nil {
-		log.Fatalln(err)
-	} else {
-		if total != 0 {
-			fmt.Println()
-		}
-		fmt.Println("处理完成！ --> ", *flagDb)
-	}
+	fmt.Println("处理完成！ --> ", *flagDb)
 }
