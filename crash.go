@@ -163,6 +163,42 @@ func NewCrash(text string) (rs *Crash, err error) {
 	return
 }
 
+func CreateCrashTable(db *sql.DB) error {
+	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS crash (
+		id INTEGER PRIMARY KEY,
+		time INTEGER,
+		tm INTEGER,
+		sv TEXT,
+		sw INTEGER,
+		sh INTEGER,
+		ov TEXT,
+		ch TEXT,
+		mb TEXT,
+		cuid TEXT,
+		net INTEGER,
+
+		detail TEXT,
+		mem_info TEXT,
+		thread_num INTEGER,
+		locx INTEGER,
+		locy INTEGER,
+		cpu_abi TEXT,
+		cpu_abi2 TEXT,
+		feature TEXT,
+		coms_info TEXT,
+		pages TEXT,
+
+		bgm INTEGER,
+		bgt INTEGER,
+		bgw INTEGER,
+		fgm INTEGER,
+		fgt INTEGER,
+		fgw INTEGER,
+
+		UNIQUE (time, tm, cuid) ON CONFLICT IGNORE);`)
+	return err
+}
+
 func NewCrashInsertStmt(db *sql.DB) (*sql.Stmt, error) {
 	return db.Prepare(`INSERT INTO crash (
 			time, tm, sv, sw, sh,
@@ -191,8 +227,8 @@ func (self *Crash) Insert(stmt *sql.Stmt) error {
 		self.Cuid,
 		self.Net,
 
-		self.Detail,
-		self.Meminfo,
+		string(self.Detail),
+		string(self.Meminfo),
 		self.ActiveThread,
 		self.Locx,
 		self.Locy,

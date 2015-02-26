@@ -25,6 +25,8 @@ func MainDownload(args []string) {
 	flagDb := cmd.String("db", "data.db", "数据库")
 	cmd.Parse(args)
 
+	hasError := false
+
 	if len(*flagDate) == 0 {
 		log.Fatalln("no date found!")
 	}
@@ -34,7 +36,7 @@ func MainDownload(args []string) {
 		log.Fatalln(err)
 	}
 
-	if err = createTableIfNeeded(db); err != nil {
+	if err = CreateCrashTable(db); err != nil {
 		log.Fatalln(err)
 	}
 
@@ -44,13 +46,28 @@ func MainDownload(args []string) {
 		log.Fatalln(err)
 	}
 	defer resp.Body.Close()
+
 	total, _ := strconv.Atoi(resp.Header.Get("Content-Length"))
 	writed := 0
 	var textGeted string
 	var chars int
 
-	crashs := make([]*Crash, 0, 512)
 	scanner := bufio.NewScanner(resp.Body)
+
+	fmt.Println("开始下载并梳理数据……")
+
+	tx, err := db.Begin()
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	stmt, err := NewCrashInsertStmt(db)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	stmt = tx.Stmt(stmt) // 转换为批处理的 stmt
+
 	for scanner.Scan() {
 		textGeted = scanner.Text()
 		writed += len(textGeted)
@@ -67,52 +84,34 @@ func MainDownload(args []string) {
 			crash, err := NewCrash(text)
 			if err != nil {
 				log.Println(err)
+				hasError = true
 			} else {
-				crashs = append(crashs, crash)
+				err = crash.Insert(stmt)
+				if err != nil {
+					log.Println(err)
+					hasError = true
+				}
 			}
 		}
-	}
-	if total != 0 {
-		fmt.Println()
 	}
 
 	if err = scanner.Err(); err != nil {
 		log.Println(err)
+		hasError = true
 	}
-}
 
-func createTableIfNeeded(db *sql.DB) error {
-	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS crash (
-		id INTEGER PRIMARY KEY,
-		time INTEGER,
-		tm INTEGER,
-		sv TEXT,
-		sw INTEGER,
-		sh INTEGER,
-		ov TEXT,
-		ch TEXT,
-		mb TEXT,
-		cuid TEXT,
-		net INTEGER,
+	if hasError {
+		err = tx.Rollback()
+	} else {
+		err = tx.Commit()
+	}
 
-		detail TEXT,
-		mem_info TEXT,
-		thread_num INTEGER,
-		locx INTEGER,
-		locy INTEGER,
-		cpu_abi TEXT,
-		cpu_abi2 TEXT,
-		feature TEXT,
-		coms_info TEXT,
-		pages TEXT,
-
-		bgm INTEGER,
-		bgt INTEGER,
-		bgw INTEGER,
-		fgm INTEGER,
-		fgt INTEGER,
-		fgw INTEGER,
-
-		UNIQUE (time, tm, cuid) ON CONFLICT IGNORE);`)
-	return err
+	if err != nil {
+		log.Fatalln(err)
+	} else {
+		if total != 0 {
+			fmt.Println()
+		}
+		fmt.Println("处理完成！ --> ", *flagDb)
+	}
 }
