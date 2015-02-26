@@ -16,6 +16,11 @@ const (
 	_TIME_LAYOUT = "20060102150405"
 )
 
+var (
+	regxDetail *regexp.Regexp = regexp.MustCompile(`\{([^\s\{\}=/w]{3,}?)=`)
+	regxPages  *regexp.Regexp = regexp.MustCompile(`#\d+:([^#]+)`)
+)
+
 type Crash struct {
 	Time time.Time
 	Tm   time.Time
@@ -38,6 +43,13 @@ type Crash struct {
 	Feature      string
 	ComsInfo     []string
 	Pages        []string
+
+	Bgm int
+	Bgt int
+	Bgw int
+	Fgm int
+	Fgt int
+	Fgw int
 }
 
 func New(text string) (rs *Crash, err error) {
@@ -84,7 +96,7 @@ func parseMainItem(crash *Crash, item string) error {
 
 	switch key {
 	case "time":
-		t, err := time.Parse(_TIME_LAYOUT, value)
+		t, err := time.ParseInLocation(_TIME_LAYOUT, value, time.Local)
 		if err != nil {
 			log.Println("Error time:", err, value)
 		} else {
@@ -135,8 +147,6 @@ func parseMainItem(crash *Crash, item string) error {
 	return nil
 }
 
-var regx *regexp.Regexp
-
 /*
 {nl_success=[app_BaiduMapBaselib, BDSpeechDecoder_V1, gnustl_shared, app_BaiduMapApplib, bds, app_BaiduNaviApplib, app_BaiduVIlib, bd_etts, cpu_features, etts_domain_data_builder]}
 {mem_info=HeapMax:128,DvmTotal:43712,DvmFree:12302,Pss:50401,Private:34224,Shared:11860}
@@ -160,7 +170,7 @@ var regx *regexp.Regexp
 {fgw=5}
 */
 func parseActParam(crash *Crash, txt string) error {
-	indexSlice := regx.FindAllStringSubmatchIndex(txt, -1)
+	indexSlice := regxDetail.FindAllStringSubmatchIndex(txt, -1)
 	size := len(indexSlice)
 	var key, value string
 	getValue := func(i, size int, slice [][]int, txt string) (string, string) {
@@ -200,6 +210,22 @@ func parseActParam(crash *Crash, txt string) error {
 			crash.CpuAbi = value
 		case "cpu_abi2":
 			crash.CpuAbi2 = value
+		case "bgm":
+			crash.Bgm, _ = strconv.Atoi(value)
+		case "bgt":
+			crash.Bgt, _ = strconv.Atoi(value)
+		case "bgw":
+			crash.Bgw, _ = strconv.Atoi(value)
+		case "fgm":
+			crash.Fgm, _ = strconv.Atoi(value)
+		case "fgt":
+			crash.Fgt, _ = strconv.Atoi(value)
+		case "fgw":
+			crash.Fgw, _ = strconv.Atoi(value)
+		case "coms_info":
+			parseComsInfo(crash, value)
+		case "pages":
+			parsePages(crash, value)
 		}
 	}
 	return nil
@@ -240,8 +266,34 @@ func parseFeature(crash *Crash, txt string) {
 	}
 
 	crash.Feature = buf.String()
+}
 
-	if !fill {
-		log.Printf("\n%s\n", crash.Feature)
+func parseComsInfo(crash *Crash, txt string) {
+	txt = strings.TrimSpace(txt)
+	if len(txt) == 0 {
+		return
+	}
+
+	infos := strings.Split(txt, "-")
+	for _, info := range infos {
+		crash.ComsInfo = append(crash.ComsInfo, info)
+	}
+}
+
+func parsePages(crash *Crash, txt string) {
+	txt = strings.TrimSpace(txt)
+	if len(txt) == 0 {
+		return
+	}
+
+	couples := regxPages.FindAllStringSubmatchIndex(txt, -1)
+	var index int
+	var page string
+	for _, couple := range couples {
+		page = txt[couple[2]:couple[3]]
+		if index = strings.LastIndex(page, "|"); index != -1 && index != len(page)-1 {
+			page = page[index+1:]
+		}
+		crash.Pages = append(crash.Pages, page)
 	}
 }
