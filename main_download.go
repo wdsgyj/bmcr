@@ -16,7 +16,6 @@ import (
 
 const (
 	_ERROR_URI = "http://mapmo.baidu.com/lbspm/apps/crashlog/protected/logdata/map/map_android_crash/%s"
-	_ASCII_    = 8
 )
 
 func MainDownload(args []string) {
